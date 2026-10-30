@@ -4,10 +4,19 @@ using System.Reflection;
 
 internal static class Program
 {
-    private const string Managed = "/home/hermes/projects/valheim/quartermaster_integrations/refs/game/valheim_Data/Managed";
-    private const string Core = "/home/hermes/projects/valheim/quartermaster_integrations/refs/game/BepInEx/core";
-    private const string Mods = "/home/hermes/projects/valheim/quartermaster_integrations/refs/mods";
-    private const string Candidates = "/home/hermes/projects/valheim/quartermaster_integrations/refs/candidates";
+    // Resolved against the working directory (repo root, locally and in CI) so the audit is not
+    // tied to one machine's layout; override with QI_* when the refs live elsewhere.
+    private static readonly string Managed = Env("QI_MANAGED", "refs/game/valheim_Data/Managed");
+    private static readonly string Core = Env("QI_CORE", "refs/game/BepInEx/core");
+    private static readonly string Mods = Env("QI_MODS", "refs/mods");
+    private static readonly string Candidates = Env("QI_CANDIDATES", "refs/candidates");
+    private static readonly string ModDll = Env("QI_MOD_DLL", "bin/Release/net48/QuarterMaster_Integrations.dll");
+
+    private static string Env(string name, string fallback)
+    {
+        string value = Environment.GetEnvironmentVariable(name);
+        return string.IsNullOrEmpty(value) ? fallback : value;
+    }
 
     private static int _fail;
 
@@ -75,7 +84,10 @@ internal static class Program
         Method(aaa, "AzuAntiArthriticCrafting.Patches.RecipeListPerfCache", "Invalidate", Array.Empty<string>(), "Void", true);
 
         // ---- AAABuildMenu 1.0.6 ----------------------------------------------------------------
-        var abm = Load(mlc, Path.Combine(Candidates, "AAABuildMenu.dll"));
+        // CI fetches it into refs/mods; refs/candidates is where it lives during evaluation.
+        string abmPath = Path.Combine(Mods, "AAABuildMenu.dll");
+        if (!File.Exists(abmPath)) abmPath = Path.Combine(Candidates, "AAABuildMenu.dll");
+        var abm = Load(mlc, abmPath);
         Method(abm, "AAABuildMenu.PinnedRecipeTracker", "CountItem", new[] { "Inventory", "String" }, "Int32", true);
 
         Console.WriteLine("\n### versions audited");
@@ -84,10 +96,9 @@ internal static class Program
         Console.WriteLine("  AAABuildMenu 1.0.6  (Hexium only - not on Thunderstore)");
 
         Console.WriteLine("\n### built mod assembly");
-        string modDll = "/home/hermes/projects/valheim/quartermaster_integrations/bin/Release/net48/QuarterMaster_Integrations.dll";
-        if (File.Exists(modDll))
+        if (File.Exists(ModDll))
         {
-            var modAsm = mlc.LoadFromAssemblyPath(modDll);
+            var modAsm = mlc.LoadFromAssemblyPath(ModDll);
             var v = modAsm.GetName().Version;
             Console.WriteLine($"  {modAsm.GetName().Name} {v}  (toString(3) = {v?.ToString(3)})");
         }

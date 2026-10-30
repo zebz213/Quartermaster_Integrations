@@ -1,0 +1,126 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. v2.5.0)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Build and package only — do not publish a release'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    name: Build, audit and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Fetch reference assemblies
+        run: ./tooling/ci-fetch-refs.sh
+
+      - name: Determine version
+        id: version
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$INPUT_VERSION"
+          else
+            VERSION="$REF_NAME"
+          fi
+          VERSION="${VERSION#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version '$VERSION'; expected x.y.z or vx.y.z" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Verify version matches source
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          grep -q "PluginVersion = \"$VERSION\"" qi_main.cs
+          grep -q "<Version>$VERSION</Version>" QuarterMaster_Integrations.csproj
+          python3 - <<'PY'
+          import json, os
+          version = os.environ["VERSION"]
+          manifest = json.load(open("resources/manifest.json"))
+          assert manifest["version_number"] == version, \
+              f"manifest {manifest['version_number']} != {version}"
+          changelog = open("resources/CHANGELOG.md").read()
+          assert f"## [{version}]" in changelog, f"CHANGELOG has no [{version}] entry"
+          PY
+
+      - name: Build and audit
+        run: ./tooling/build.sh
+
+      - name: Package
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, zipfile
+          version = os.environ["VERSION"]
+          zip_name = f"Quartermaster_Integrations-{version}.zip"
+          entries = [
+              ("artifacts/debug/QuarterMaster_Integrations.dll", "QuarterMaster_Integrations.dll"),
+              ("resources/manifest.json", "manifest.json"),
+              ("resources/README.md", "README.md"),
+              ("resources/CHANGELOG.md", "CHANGELOG.md"),
+              ("resources/icon.png", "icon.png"),
+          ]
+          with zipfile.ZipFile(zip_name, "w", zipfile.ZIP_DEFLATED) as z:
+              for source, name in entries:
+                  z.write(source, name)
+          print(f"Packaged {zip_name}")
+          PY
+          sha256sum "Quartermaster_Integrations-${VERSION}.zip" \
+            > "Quartermaster_Integrations-${VERSION}-CHECKSUMS.txt"
+          cat "Quartermaster_Integrations-${VERSION}-CHECKSUMS.txt"
+          unzip -l "Quartermaster_Integrations-${VERSION}.zip"
+
+      - name: Publish release
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
+          files: |
+            Quartermaster_Integrations-${{ steps.version.outputs.version }}.zip
+            Quartermaster_Integrations-${{ steps.version.outputs.version }}-CHECKSUMS.txt
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          overwrite_files: true
+          draft: false
+          prerelease: false

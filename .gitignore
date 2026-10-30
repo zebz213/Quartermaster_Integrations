@@ -10,6 +10,9 @@ refs/
 # Build artefacts (candidate drop + release zips live here on a dev machine)
 artifacts/
 
+# CI reference/download cache
+.ci/
+
 # Decompiler output, if pointed inside the tree
 docs/decompiled/
 
