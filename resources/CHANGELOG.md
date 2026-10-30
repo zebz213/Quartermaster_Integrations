@@ -1,0 +1,189 @@
+﻿# Changelog
+
+All notable changes to the **Quartermaster Integrations** mod will be documented in this file.
+
+Every version that gets built is listed here, newest first — including builds that were tested but never uploaded. Unreleased versions are kept for history.
+
+---
+
+## [2.5.0] - 2026-10-30
+
+First of the three integrations from the compatibility review. A new integration is a minor bump, so the patch digit resets to zero.
+
+### Added
+
+* **AAABuildMenu pinned-recipe counts** (optional, `Azumatt.AAABuildMenu` 1.0.6+). Pinned build rows render `have/need` from `PinnedRecipeTracker.CountItem`, which sums the player's pockets only. A postfix on that single method adds Quartermaster's storage count when the inventory passed in is the player's own, so pinned rows show the same numbers as the crafting window.
+  * Display-only: both call sites compare the value against `row.ResNeeds` to choose a colour and nothing else reads it, so this cannot change what a build spends.
+  * Gated to the player inventory by reference — a container inventory already counts its own contents, and adding nearby storage on top would double-count.
+
+---
+
+## [2.4.4] - 2026-10-29
+
+Internal only: dead code, duplicated work and per-frame waste removed. No functional or display changes.
+
+---
+
+## [2.4.3] - 2026-10-28
+
+Follow-up to in-game testing of 2.4.2.
+
+### Fixed
+
+* **MaxCraft showed `1` with an empty inventory**: AAA floors its own answer at `Mathf.Clamp(num, 1, 999)`, and the previous "only ever raise" rule preserved that floor. The postfix now reports **0** when its own count and `HaveRequirements` both agree nothing can be crafted — while still reporting `1` for recipes whose requirements are all unknown (modded upgrade tokens), and still leaving AAA's `0` alone when the crafting station is missing or under-levelled. The upgrade tab likewise reports 0 when the next quality is unaffordable.
+
+---
+
+## [2.4.2] - 2026-10-28
+
+### Fixed
+
+* **Batch `-` Button Lock-Up (Regression)**: `ForceEnableBatchButtons` gated the decrement on affordability, re-creating the trap that 2.1.6 claimed to fix. `-` is enabled whenever the quantity is above 1, so you can always step back down to a craftable amount.
+* **Craft Button Latching**: The batch enforcement postfix no longer derives "can craft one" from `m_craftButton.interactable`. That field is written by the same postfix, so it was effectively comparing its own previous decision against itself and could stay enabled after the materials ran out.
+* **MaxCraft Reported 0 For Every Recipe** when the selected recipe could not be resolved (renamed field or unknown pair type). AAA's own result is now left untouched instead of being zeroed.
+* **MaxCraft Ignored AAA's Crafting-Station Gate**: the max-craft postfix now only *raises* AAA's own figure and never lowers it or revives a `0`. `Utilities.CalculateMaxCraftAmount` returns `0` when the recipe needs a crafting station you are not standing at, or one below the required level; the previous full replacement could report a batch of 100 in that state.
+* **Pocket Counts Double-Added to AAA**: `GetItemsInCloseContainers` is container-only — its callers add the pocket count themselves — so the postfix now adds our *storage* count instead of a pocket-inclusive total, which had been counting pockets twice in both the requirement display and max-craft.
+* **MaxCraft Over-Reporting**: `CalculateTrueMaxCraft` no longer floors the result at `1` when a requirement is provably short. Recipes whose requirements are all unknown (modded dummy upgrade tokens) still report `1` and remain craftable.
+* **ExtraSlots Items Could Be Lost Or Share A Cell**: protected items are re-added before anything that can throw, and items the sort placed onto a protected slot are relocated instead of leaving two items in one grid cell.
+* **`Inventory.Changed` Invalidation Storm**: cache invalidation is now a dirty flag and is skipped while the crafting UI is closed, so container activity elsewhere in the world no longer forces cache rebuilds and a recipe-list invalidation for AAA on every item move.
+* **Silent Patch Failures**: every reflection patch goes through `HarmonyPatchGuard`, which logs which target failed instead of aborting the remaining patches for that integration.
+* **Latching Reflection Lookups**: `GetSelectedRecipeData` no longer caches a failed property resolve, so a renamed field cannot permanently disable max-craft and batch enforcement.
+
+### Changed
+
+* **Storage counts come from Quartermaster itself**: `GetQuartermasterStorageCount` now binds `WarehouseService.CountAvailableNearPlayer(string, int, bool)` instead of walking every `Container` in the scene. Counts therefore honour `CraftRange`, the per-chest **Crafting Supply** flag, the global `CraftFromContainers` toggle, ward/in-use rules and world-level matching — i.e. exactly what Quartermaster will spend at craft time.
+* **Craft button defers to Quartermaster's requirement check**: `canCraftSingle` / `canBatch` now use `Player.HaveRequirements` (the 3- and 4-argument overloads), which Quartermaster transpiles to be warehouse-aware. Our own fallback count could enable a craft for chests Quartermaster would refuse to pull from.
+* **ExtraSlots protection delegated to Quartermaster**: the remove-from-item-list / clamp `m_height` / restore cycle is gone. Quartermaster's `SortInventory` already honours `ExternalSlotCompatibility` and its own sort button passes `preserveEquipped: true`; this mod now only postfixes `IsProtectedPlayerSlot`, so a failed reflection probe inside Quartermaster cannot cost the player their slot contents.
+* **AdventureBackpacks proxy block retargeted**: `StoreAllInOpenChest` is `(Player, Container) : int` in Quartermaster 0.1.66. The old `(Container, ref int)` shape never bound, so the backpack proxy was never actually blocked.
+* **New `DeferToOtherFormatting` option** (`1. General`, default `false`): when AAA Crafting or AdventureBackpacks has already decorated a requirement row, leave their text alone. Vanilla's own text is a bare number, so the check only triggers on another mod's formatting.
+* **`SetupRequirement`'s sixth parameter is now used**: the game passes `craftMultiplier` to `SetupRequirement` directly, so the display prefers it and only falls back to reading AAA Crafting / My Little UI when it is 1.
+* Batch amount is memoized per frame, cutting repeated reflection reads from once per requirement row to once per frame.
+* Insufficient-material flashing is quantized to roughly 12 Hz to avoid a TextMeshPro mesh rebuild for every row on every frame.
+
+---
+
+## [2.4.1] - 2026-10-28
+
+### Changed
+
+* **Safe ExtraSlots List Manipulation**: Replaced `inventory.RemoveItem(item)` during Quartermaster sort protection with direct backing-list removal (`items.RemoveAt(i)`), preventing premature `Inventory.Changed()` events, accidental item un-equipping, or AdventureBackpacks "Yard Sale" triggers.
+
+### Fixed
+
+* **AdventureBackpacks Proxy Isolation**: `AB_BackpackProxy` containers are excluded from nearby-container scans, so backpack contents are never double-counted as world chests, and sorting the main inventory never pulls items out of an equipped backpack.
+* **Sort Button Visibility with Open Backpack**: Quartermaster's Sort button stays active and visible while the AdventureBackpacks inventory panel is open.
+
+---
+
+## [2.4.0] - 2026-10-27
+
+### Added
+
+* **ExtraSlots Integration (`shudnal.ExtraSlots`)**: protects ExtraSlots rows (`y >= InventoryHeightPlayer`) and slot items (Food, Ammo, Quick, Misc, Equipment, and Extra Utility slots) from Quartermaster's `SortInventory` and `StoreAll` actions.
+* **AdventureBackpacks Integration (`vapok.mods.adventurebackpacks`)**: initial soft-dependency support to detect `AB_BackpackProxy` containers.
+
+---
+
+## [2.3.1] - 2026-10-27
+
+### Changed
+
+* **Renamed for Expanded Scope**: Renamed the mod due to its expanded scope integrating additional mods. Superseded the same day by 2.4.0; kept here because this version was published.
+
+---
+
+## [2.3.0] - 2026-10-27
+
+### Changed
+
+* **Mod Scope & Renaming**: Renamed the mod namespace, assembly, and identity from *MyLittleUI Quartermaster Bridge* to **Quartermaster Integrations** (`com.bootstrapboys.quartermaster_integrations`).
+* **Soft Dependency Refactoring**: Converted **My Little UI** (`shudnal.MyLittleUI`) from a hard dependency to a soft dependency, ensuring the mod functions with vanilla Valheim, Quartermaster, and AAA Crafting even when My Little UI is not installed.
+
+---
+
+## [2.2.6] - 2026-10-27
+
+### Changed
+
+* **Standardized Plugin GUID**: Updated `PluginGUID` from `com.bootstrapboys.valheim.mlui_qm_bridge` to `com.bootstrapboys.mlui_qm_bridge`.
+
+---
+
+## [2.2.5] - 2026-10-26
+
+### Added
+
+* **Strict Batch Limit Enforcement**: respects the hard batch ceiling of `100` for **AAA Crafting** (`v2.1.12`) and `99` for **MyLittleUI** (`v1.2.32`) across input parsing, `MaxCraft` calculations, and `+`/`-` button states.
+
+---
+
+## [2.2.4] - 2026-10-26
+
+### Added
+
+* **AAA Crafting v2.1.12 Compatibility**: reflection binding to `RecipeListPerfCache.Invalidate()` so container and inventory changes immediately refresh paginated recipe grids.
+
+---
+
+## [2.2.3] - 2026-10-26
+
+### Fixed
+
+* **MyLittleUI v1.2.32 Compatibility**: Updated the reflection binding for `MyLittleUI.MultiCraft.amount` with explicit `BindingFlags.NonPublic | BindingFlags.Static` after it was changed to `private`.
+
+---
+
+## [2.2.2] - 2026-10-26
+
+### Fixed
+
+* **Weapon & Armor MaxCraft Calculation**: Fixed `CalculateTrueMaxCraft` being artificially capped at `1` for weapons and armor by evaluating tier-1 ingredient amounts via `req.GetAmount(1)` and skipping upgrade-only (`<= 0`) or unknown dummy token requirements.
+
+---
+
+## [2.2.1] - 2026-10-26
+
+Internal only: debug guard cleanup. No functional changes.
+
+---
+
+## [2.1.9] - 2026-10-26
+
+### Fixed
+
+* **Modded Dummy Upgrade Tokens**: Fixed recipes from mods (such as Therzie's Warfare/Armory/Monstrum) showing `MaxCraft: 0` and a disabled Craft button due to hidden/unlearned upgrade token requirements (`$item_upgrader_...`). Single-craft eligibility now defers to Valheim's Quartermaster-transpiled `player.HaveRequirements`.
+
+---
+
+## [2.1.6] - 2026-10-26
+
+### Fixed
+
+* **Batch `+` and `-` Button Lockup**: Fixed an issue where exceeding available resources for a batch disabled the `-` button, trapping the player at an uncraftable batch quantity. `ForceEnableBatchButtons` runs at `Priority.Last` after AAA Crafting.
+* **Upgrade Tab Support**: Fixed the Upgrade button becoming disabled when a batch multiplier `> 1` was left over from the Craft tab.
+
+---
+
+## [2.1.3] - 2026-10-26
+
+### Added
+
+* **AAA Crafting MaxCraft Integration**: Patched `Utilities.GetItemsInCloseContainers`, `AAACraft.CalculateMaxCraftAmount`, and `Utilities.CalculateMaxCraftAmount`, and enabled `AzuAntiArthriticCraftingPlugin.CfcLoaded` so Quartermaster storage is included in `MaxCraft` and `RecipeTrackerUI`.
+* **Configurable Display Modes & Visuals**: Added `RequirementDisplayMode` (`CombinedTotal`, `SplitInventoryAndStorage`, `TotalWithSplit`), customizable sufficient resource colors, and configurable red pulsing alerts when lacking batch materials.
+
+---
+
+## [1.0.56] - 2026-10-25
+
+### Fixed
+
+* Stabilized Quartermaster container scanning (`GetQuartermasterStorageCount`) and eliminated double-counting in `InventoryGui.SetupRequirement`.
+
+---
+
+## [1.0.0] - 2026-09-15
+
+### Added
+
+* Initial release of **MyLittleUI Quartermaster Bridge**.
+* Added Harmony postfix on `InventoryGui.SetupRequirement` to append nearby chest inventory counts to MyLittleUI requirement labels while respecting `PrivateArea.CheckAccess` ward permissions.

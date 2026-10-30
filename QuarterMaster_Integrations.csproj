@@ -1,0 +1,80 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>QuarterMaster_Integrations</AssemblyName>
+    <Description>Seamlessly integrates nearby Quartermaster storage chests into Valheim crafting UI requirements, max-craft calculations, and multi-craft batch processing.</Description>
+
+    <!-- Keep in sync with BridgePlugin.PluginVersion, resources/manifest.json and resources/CHANGELOG.md
+         Versioning: fixes bump the patch digit, a new integration bumps the minor and resets the patch. -->
+    <Version>2.5.0</Version>
+    <AssemblyVersion>2.5.0.0</AssemblyVersion>
+    <FileVersion>2.5.0.0</FileVersion>
+
+    <LangVersion>latest</LangVersion>
+
+    <!-- 1. Your core Valheim game installation directory (where game assemblies and data live).
+         Override without editing this file by setting a VALHEIM_DIR environment variable. -->
+    <ValheimInstallDir Condition="'$(VALHEIM_DIR)' != ''">$(VALHEIM_DIR)</ValheimInstallDir>
+    <ValheimInstallDir Condition="'$(ValheimInstallDir)' == ''">C:\SteamLibrary\steamapps\common\Valheim</ValheimInstallDir>
+
+    <!-- 2. Your separate BepInEx directory (can be same as ValheimInstallDir, or a custom path / MO2 profile folder).
+         Override with a BEPINEX_DIR environment variable. -->
+    <BepInExDir Condition="'$(BEPINEX_DIR)' != ''">$(BEPINEX_DIR)</BepInExDir>
+    <BepInExDir Condition="'$(BepInExDir)' == ''">C:\Users\zebz2\AppData\Roaming\com.kesomannen.gale\valheim\profiles\Bootstrap Boys Private Server Pack\BepInEx</BepInExDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Guards: the stub harness lives under tooling/ and would otherwise be compiled into the mod
+         (its stubs redeclare BepInEx/Unity types). docs/ is kept for anyone who points the
+         decompiler output there; tooling/decompile.sh defaults to /tmp instead. -->
+    <Compile Remove="docs/**/*.cs" />
+    <Compile Remove="tooling/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- BepInEx and Harmony Dependencies (pulled from your custom BepInEx folder) -->
+    <Reference Include="BepInEx">
+      <HintPath>$(BepInExDir)/core/BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(BepInExDir)/core/0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Unity Dependencies (pulled from game directory) -->
+    <Reference Include="UnityEngine">
+      <HintPath>$(ValheimInstallDir)/valheim_Data/Managed/UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(ValheimInstallDir)/valheim_Data/Managed/UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(ValheimInstallDir)/valheim_Data/Managed/UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="TextMeshPro">
+      <HintPath>$(ValheimInstallDir)/valheim_Data/Managed/Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Valheim Game Assemblies (pulled from game directory) -->
+    <Reference Include="assembly_valheim">
+      <HintPath>$(ValheimInstallDir)/valheim_Data/Managed/assembly_valheim.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Vector2i (ExtraSlots' grid-position delegate) lives here. -->
+    <Reference Include="assembly_utils">
+      <HintPath>$(ValheimInstallDir)/valheim_Data/Managed/assembly_utils.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Deliberately no references to Quartermaster, MyLittleUI, AAA Crafting, ExtraSlots or
+         AdventureBackpacks: every one of them is reached by GUID + reflection, so referencing their
+         DLLs would only make the build fail on machines that do not have those plugins installed. -->
+  </ItemGroup>
+
+</Project>

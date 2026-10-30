@@ -1,0 +1,20 @@
+# Build output
+bin/
+obj/
+*.user
+*.suo
+
+# Local reference assemblies and mod DLLs (game files + third-party mods, not redistributable)
+refs/
+
+# Build artefacts (candidate drop + release zips live here on a dev machine)
+artifacts/
+
+# Decompiler output, if pointed inside the tree
+docs/decompiled/
+
+# Editor / OS noise
+.vs/
+.idea/
+*.swp
+.DS_Store

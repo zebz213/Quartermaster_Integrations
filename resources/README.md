@@ -1,0 +1,124 @@
+﻿# Quartermaster Integrations
+
+Puts Quartermaster's nearby storage into the crafting window: how much of each ingredient you actually have, how many of the item you can craft, and how big a batch you can afford — counted with Quartermaster's own rules, so the numbers match what a craft will really pull.
+
+---
+
+## What it does
+
+* **Available counts in every requirement row** — Each row shows the required amount plus what you hold across your pockets and nearby Quartermaster storage (e.g., `10 (16)`).
+* **Batch-aware numbers** — Raise the craft amount in AAA Crafting or My Little UI and the rows scale with it, so a recipe needing 10 bronze reads `50` at a batch of 5. You can see what a batch actually costs before committing.
+* **Counts you can trust** — Storage totals are requested directly from Quartermaster rather than estimated locally, meaning `CraftRange`, the per-chest **Crafting Supply** flag, ward access, in-use chests, and the global `CraftFromContainers` toggle are all fully respected. A chest you deliberately excluded from crafting supply will never inflate the display.
+* **Max Craft that respects the station** — The max-craft figure follows the same accounting and never overrides the game: no station, or a station below the recipe's level, results in `0` rather than a phantom batch of 100.
+* **Upgrade tab included** — Counts appear on the upgrade tab too, and its max-craft figure reports `0` when the next quality is unaffordable rather than a batch you could not pay for.
+* **Honest craft button** — It enables only when the *whole batch* is affordable, and `-` always stays usable so you can never get stuck at a batch you cannot pay for.
+* **Insufficient rows flash** — Colors and flash speed are configurable, so a missing ingredient is obvious at a glance.
+* **Does not disturb your items** — ExtraSlots slot rows and typed slots are protected from Quartermaster's sort and store actions, and an open AdventureBackpacks backpack is never dumped into your inventory by a sort action.
+
+---
+
+## Integrations
+
+| Mod | Required | What it adds here |
+| :--- | :--- | :--- |
+| **Quartermaster** (`local.valheim.quartermaster`) | **Yes** — 0.1.66+ | The source of every storage count |
+| **AAA Crafting** (`Azumatt.AzuAntiArthriticCrafting`) | No — 2.1.12+ | Craft-amount input, Max Craft label, batch cap of 100 |
+| **My Little UI** (`shudnal.MyLittleUI`) | No — 1.2.32–1.2.33 | Craft-amount input, batch cap of 99 |
+| **ExtraSlots** (`shudnal.ExtraSlots`) | No — 1.2.21+ | Slot rows and typed slots survive Quartermaster's sort/store |
+| **AdventureBackpacks** (`vapok.mods.adventurebackpacks`) | No — 2.4.6+ | Backpack contents excluded from counts, backpack proxy never a store target |
+| **AAABuildMenu** (`Azumatt.AAABuildMenu`) | No — 1.0.6+ | Pinned build rows show storage-inclusive have/need counts |
+
+Every optional integration is reflection-bound at startup and reports what it found. Missing one costs you that specific convenience, never the mod itself.
+
+---
+
+## How it works
+
+Two rules keep the display honest:
+
+1. **Storage numbers are requested from Quartermaster**, not recomputed locally. The mod binds `WarehouseService.CountAvailableNearPlayer`, the same query Quartermaster uses to decide what a craft may pull, so the UI cannot promise materials the craft would refuse.
+2. **"Can I craft this?" is answered by the game.** The craft button is gated on `Player.HaveRequirements`, which Quartermaster makes storage-aware. The max-craft figure is computed from the same counts and reports `0` only when `HaveRequirements` agrees that nothing is craftable. The mod never invents a state the game disagrees with: if you cannot craft it, the row reads `0` and the button is disabled.
+
+One more rule covers modded recipes: requirements your character does not recognize — such as the hidden upgrade tokens some modded gear uses — are ignored rather than treated as missing, so modded recipes are never falsely disabled.
+
+**Material from other storage mods is not counted.** Every number here comes from Quartermaster. If another craft-from-container mod can also supply an ingredient, that stock will not appear in the displayed count — though the craft can still succeed, because the button and the max-craft figure defer to the game's requirement check rather than to these numbers.
+
+---
+
+## Installation
+
+### With a mod manager (recommended)
+
+Install through **Gale** or **r2modman**. Required dependencies will resolve automatically.
+
+### Manual installation
+
+1. Install [BepInExPack Valheim](https://valheim.thunderstore.io/package/denikson/BepInExPack_Valheim/).
+2. Install [Quartermaster](https://valheim.hexium.gg/mods/Vassteel/Quartermaster) (0.1.66 or newer). Optionally add AAA Crafting, My Little UI, ExtraSlots, and/or AdventureBackpacks.
+3. Drop `QuarterMaster_Integrations.dll` into your `Valheim/BepInEx/plugins/` folder.
+
+---
+
+## Configuration
+
+Generated at `BepInEx/config/com.bootstrapboys.quartermaster_integrations.cfg` on first launch.
+
+| Section | Key | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `1. General` | `Enabled` | `true` | Turn the mod's UI changes off without uninstalling. |
+| `1. General` | `RequirementDisplayMode` | `CombinedTotal` | How the available count is written (see below). |
+| `1. General` | `DeferToOtherFormatting` | `false` | If AAA Crafting or AdventureBackpacks has already formatted a row, leave its text alone. Only enable this if you prefer their style. My Little UI's own "available resources amount" counts your pockets only, so deferring to it drops chest totals. |
+| `2. Visuals` | `SufficientColor` | `(0.68, 0.91, 0.90, 1.00)` | Color of the available count when you have enough. |
+| `2. Visuals` | `InsufficientFlashBrightColor` | `(1.00, 0.22, 0.22, 1.00)` | Bright end of the insufficient-material flash. |
+| `2. Visuals` | `InsufficientFlashDarkColor` | `(0.45, 0.02, 0.02, 1.00)` | Dark end of the insufficient-material flash. |
+| `2. Visuals` | `FlashSpeed` | `4.0` | Flash speed, 1–12. |
+| `3. Debug` | `DebugMode` | `false` | Timestamped diagnostic log written to `BepInEx/BSBLogs/QuarterMaster_Integrations.log`. |
+
+### Display modes
+
+For a recipe needing 10 bronze, with 4 in your pockets and 12 in nearby chests:
+
+| `RequirementDisplayMode` | Row reads | Meaning |
+| :--- | :--- | :--- |
+| `CombinedTotal` (default) | `10 (16)` | Required (total available) |
+| `SplitInventoryAndStorage` | `10 (4+12)` | Required (inventory + storage) |
+| `TotalWithSplit` | `10 (16 [4+12])` | Required (total [inventory + storage]) |
+
+> **Color format:** These values are stored as `(red, green, blue, alpha)` floats from `0` to `1`, not hex values. Hand-editing with a hex value will fail to parse, causing the default to be used instead.
+
+---
+
+## Debugging
+
+Set `DebugMode = true` under `3. Debug` and the mod writes `BepInEx/BSBLogs/QuarterMaster_Integrations.log` (the file is named after the plugin and rewritten each launch) as well as the console:
+
+| Line | What it proves |
+| :--- | :--- |
+| `[Patch] '<target>' applied` | that reflection patch bound at startup |
+| `[Patches] <Type>.<Method> <- prefix N, postfix N, transpiler N, finalizer N` | the full inventory of methods this mod has patched — a missing one is a missing integration |
+| `[Config] DisplayMode: …` | the settings that session actually ran with |
+| `[Craft] '<item>' xN` then one row per requirement | `need N \| pockets A + storage B = C \| enough True/False` for the selected recipe |
+| `[AAABuildMenu] '<item>': pockets A + storage B = C` | a pinned row's count changed, and from what |
+
+---
+
+## Troubleshooting
+
+**Check the load line first.** In your `BepInEx/LogOutput.log`, you should see:
+
+```
+Quartermaster Integrations v<version> loaded (MLUI: True, AAA: True, ExtraSlots: True, Backpacks: True, BuildMenu: True, QM storage query: True).
+```
+
+* `QM storage query: False` — Quartermaster is older than 0.1.66 or the method was not found; counts will fall back to pockets only. An explanatory `[QM]` error will appear above this line.
+* A `[Patch] 'something' skipped/failed` line indicates an integration that failed to bind, along with the reason why.
+
+**Numbers look wrong?** The count is limited by three of Quartermaster's own rules. If the display shows pockets only, it is one of these:
+
+* **Range** — a chest outside Quartermaster's `CraftRange` is not counted at all.
+* **Chest flag** — the per-chest **Crafting Supply** toggle. A chest with it off is ignored on purpose.
+* **Global toggle** — Quartermaster's `CraftFromContainers`. With it off, storage is not offered to crafting at all.
+
+All three are enforced by Quartermaster, not by this mod, so the display follows them exactly.
+
+**Something else?** Set `DebugMode = true`, reproduce the issue, and include both `BepInEx/BSBLogs/QuarterMaster_Integrations.log` and `BepInEx/LogOutput.log` in your bug report.
