@@ -277,6 +277,32 @@ namespace Quartermaster_Integrations
         }
 
         /// <summary>
+        /// Debug-only: which optional integrations bound, what each one hooks, and which
+        /// Quartermaster entry points are available. A feature that silently does nothing is almost
+        /// always a `false` here, so this is the first block to read in a submitted log.
+        /// </summary>
+        public static void LogIntegrationSnapshot()
+        {
+            if (!Enabled) return;
+
+            LogDebug(
+                "[Integrations] " +
+                $"EpicLoot: {EpicLootIntegration.IsReady} (provider '{EpicLootIntegration.ProviderId}'), " +
+                $"PlanBuild: {PlanBuildIntegration.IsReady} (GetInventories adapter), " +
+                $"WardIsLove: {WardIsLoveIntegration.IsReady} (ward filter), " +
+                $"AAABuildMenu: {AAABuildMenuIntegration.IsReady}, " +
+                $"AAA: {AAACraftingIntegration.IsReady}, " +
+                $"ExtraSlots: {ExtraSlotsIntegration.IsReady}, " +
+                $"Backpacks: {AdventureBackpacksIntegration.IsReady}, " +
+                $"MLUI: {MLUIIntegration.IsReady}");
+
+            LogDebug(
+                "[QM] Bindings: " +
+                $"CountAvailableNearPlayer={BridgePlugin.HasStorageCountBinding}, " +
+                $"CraftStores={BridgePlugin.HasStorageContainerBinding}");
+        }
+
+        /// <summary>
         /// Debug-only: one dump per recipe selection or craft-amount change, showing how each
         /// requirement row got its number. This is the log that answers "why does this row read 3
         /// when my chest has 40".

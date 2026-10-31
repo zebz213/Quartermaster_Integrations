@@ -6,6 +6,32 @@ Every version that gets built is listed here, newest first — including builds 
 
 ---
 
+## [2.6.1] - 2026-10-31
+
+The remaining three integrations from the compatibility review, plus the review pass they triggered.
+
+### Added
+
+* **Epic Loot** (optional, `randyknapp.mods.epicloot` 0.15.5+). Registers a Quartermaster inventory provider, so enchanting and sacrifice costs can be paid from nearby storage and the materials are actually taken out of the chests.
+  * This one moves items: counts come from Quartermaster's own availability query, and removal walks Quartermaster's spendable-container list, so CraftRange, the per-chest Crafting Supply flag and ward access still apply.
+  * Refuses to register when **EpicLootContainerBridge** is installed - Epic Loot sums every provider, and two providers would double every chest total.
+  * No save handler: it can pay costs, but never accepts items to store.
+* **PlanBuild** (optional, `marcopogo.PlanBuild` 0.20.0+). Plan pieces can be built from storage, including "hold to add materials".
+  * Implemented as a postfix on `PlanPiece.GetInventories`, which both the affordability check and the material-adding path walk, so what is counted and what is spent cannot disagree.
+* **WardIsLove** (optional, `Azumatt.WardIsLove` 4.0.9+). Chests inside a ward the player is not permitted on are excluded from storage counts and are never pulled from.
+  * Quartermaster applies only the vanilla private-area check, which a ward can be configured to bypass; this puts the ward's own decision back in charge.
+  * Filter only: it never adds a container, and a chest outside every ward is unaffected.
+
+### Changed
+
+* Quartermaster's spendable-container list is resolved once per frame instead of on every item query, so Epic Loot's provider and PlanBuild's hover check no longer re-walk the chest list per call.
+
+### Fixed
+
+* The Epic Loot provider is unregistered when the plugin unloads. Epic Loot keeps providers in a static list, so a reload used to leave the old callbacks registered and add every storage count twice.
+
+---
+
 ## [2.5.0] - 2026-10-30
 
 First of the three integrations from the compatibility review. A new integration is a minor bump, so the patch digit resets to zero.

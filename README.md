@@ -14,7 +14,7 @@ Player-facing documentation — features, config, integrations, troubleshooting 
 | :--- | :--- |
 | `qi_main.cs` | Plugin entry point, Harmony patches, storage-query binding |
 | `qi_debugger.cs` | All diagnostics: log file, patch inventory, craft snapshots |
-| `*_integration.cs` | One file per soft dependency (AAA Crafting, My Little UI, ExtraSlots, AdventureBackpacks, AAABuildMenu) |
+| `*_integration.cs` | One file per soft dependency (AAA Crafting, My Little UI, ExtraSlots, AdventureBackpacks, AAABuildMenu, Epic Loot, PlanBuild, WardIsLove) |
 | `resources/` | Packaging metadata: `manifest.json`, README, CHANGELOG, icon |
 | `tooling/build.sh` | Build → binding audit → drop candidate in `artifacts/debug` → clean |
 | `tooling/decompile.sh` | Decompile a dependency DLL for reading (output to `/tmp`) |

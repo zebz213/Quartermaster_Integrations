@@ -18,6 +18,16 @@ internal static class Program
         return string.IsNullOrEmpty(value) ? fallback : value;
     }
 
+    /// <summary>
+    /// Optional integrations live in refs/mods when CI fetched them and in refs/candidates when
+    /// they are being evaluated locally; both are valid audit sources.
+    /// </summary>
+    private static string DepPath(string fileName)
+    {
+        string inMods = Path.Combine(Mods, fileName);
+        return File.Exists(inMods) ? inMods : Path.Combine(Candidates, fileName);
+    }
+
     private static int _fail;
 
     private static int Main()
@@ -84,16 +94,44 @@ internal static class Program
         Method(aaa, "AzuAntiArthriticCrafting.Patches.RecipeListPerfCache", "Invalidate", Array.Empty<string>(), "Void", true);
 
         // ---- AAABuildMenu 1.0.6 ----------------------------------------------------------------
-        // CI fetches it into refs/mods; refs/candidates is where it lives during evaluation.
-        string abmPath = Path.Combine(Mods, "AAABuildMenu.dll");
-        if (!File.Exists(abmPath)) abmPath = Path.Combine(Candidates, "AAABuildMenu.dll");
-        var abm = Load(mlc, abmPath);
+        var abm = Load(mlc, DepPath("AAABuildMenu.dll"));
         Method(abm, "AAABuildMenu.PinnedRecipeTracker", "CountItem", new[] { "Inventory", "String" }, "Int32", true);
+
+        // ---- Quartermaster storage surface the new integrations walk ----------------------------
+        Method(qm, "Quartermaster.WarehouseService", "CraftStores", new[] { "Player", "Boolean" }, "IEnumerable`1", true);
+        Method(qm, "Quartermaster.InventoryTransfers", "AvailableInContainer", new[] { "Container", "String", "Int32", "Boolean" }, "Int32", true);
+
+        // ---- EpicLoot 0.15.5 --------------------------------------------------------------------
+        var el = Load(mlc, DepPath("EpicLoot.dll"));
+        MethodExact(el, "EpicLoot.API", "RegisterInventoryProvider", new[]
+        {
+            "System.String",
+            "System.Func`1[System.Collections.Generic.List`1[ItemDrop+ItemData]]",
+            "System.Func`2[System.String,System.Int32]",
+            "System.Func`3[System.String,System.Int32,System.Int32]",
+            "System.Func`3[ItemDrop+ItemData,System.Int32,System.Int32]"
+        }, "Boolean", true);
+        Method(el, "EpicLoot.API", "UnregisterInventoryProvider", new[] { "String" }, "Boolean", true);
+
+        // ---- PlanBuild 0.20.0 -------------------------------------------------------------------
+        var pb = Load(mlc, DepPath("PlanBuild.dll"));
+        Method(pb, "PlanBuild.Plans.PlanPiece", "GetInventories", new[] { "Humanoid" }, "List`1", false);
+        NestedInterface(pb, "PlanBuild.Plans.PlanPiece", "IInventory", new[]
+        {
+            "CountItems(String):Int32",
+            "RemoveItem(String,Int32):Void",
+            "HaveItem(String):Boolean"
+        });
+
+        // ---- WardIsLove 4.0.9 -------------------------------------------------------------------
+        var wil = Load(mlc, DepPath("WardIsLove.dll"));
+        Method(wil, "WardIsLove.Util.CustomCheck", "CheckAccess", new[] { "Int64", "Vector3", "Single", "Boolean" }, "Boolean", true);
 
         Console.WriteLine("\n### versions audited");
         Console.WriteLine("  Quartermaster 0.1.66, AAA Crafting 2.1.12, MyLittleUI 1.2.33,");
         Console.WriteLine("  ExtraSlots 1.2.21, AdventureBackpacks 2.4.6  (exact deployed builds, from Hexium)");
         Console.WriteLine("  AAABuildMenu 1.0.6  (Hexium only - not on Thunderstore)");
+        Console.WriteLine("  EpicLoot 0.15.5, PlanBuild 0.20.0, WardIsLove 4.0.9  (candidates)");
 
         Console.WriteLine("\n### built mod assembly");
         if (File.Exists(ModDll))
@@ -145,7 +183,7 @@ internal static class Program
 
         MethodInfo m = t.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
                         .FirstOrDefault(x => x.Name == method &&
-                                             x.GetParameters().Length == paramTypeNames.Length &&
+                                             x.GetParameters().Select(p => p.ParameterType.Name).SequenceEqual(paramTypeNames) &&
                                              x.ReturnType.Name == returnType &&
                                              x.IsStatic == expectStatic);
 
@@ -199,6 +237,67 @@ internal static class Program
         }
 
         Report(true, $"{typeName}.{prop}:{propType} [{(expectStatic ? "static" : "instance")} getter]", null);
+    }
+
+    /// <summary>
+    /// Like <see cref="Method"/>, but compares the full parameter type text, so generic arguments
+    /// (Func&lt;List&lt;ItemData&gt;&gt; vs Func&lt;List&lt;object&gt;&gt;) are audited rather than just the arity.
+    /// </summary>
+    private static void MethodExact(Assembly asm, string typeName, string method, string[] paramTypes, string returnType, bool expectStatic)
+    {
+        if (asm == null) return;
+
+        Type t = asm.GetType(typeName);
+        if (t == null)
+        {
+            Report(false, $"{typeName}.{method}", "type not found");
+            return;
+        }
+
+        static string Norm(string s) => s.Replace(" ", string.Empty);
+        string[] want = paramTypes.Select(Norm).ToArray();
+
+        MethodInfo m = t.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
+                        .FirstOrDefault(x => x.Name == method &&
+                                             x.ReturnType.Name == returnType &&
+                                             x.IsStatic == expectStatic &&
+                                             x.GetParameters().Select(p => Norm(p.ParameterType.ToString())).SequenceEqual(want));
+
+        if (m == null)
+        {
+            var near = t.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
+                        .Where(x => x.Name == method)
+                        .Select(x => $"{(x.IsStatic ? "static " : "")}({string.Join(",", x.GetParameters().Select(p => p.ParameterType.ToString()))}):{x.ReturnType.Name}");
+            Report(false, $"{typeName}.{method}({string.Join(",", paramTypes)}):{returnType}", "no exact overload; found: " + string.Join(" | ", near));
+            return;
+        }
+
+        Report(true, $"{typeName}.{method}({string.Join(",", paramTypes)}):{returnType}{(expectStatic ? " [static]" : "")}", null);
+    }
+
+    /// <summary>
+    /// Proves a nested interface still declares the exact members an adapter implements. A proxy
+    /// created against a renamed member compiles fine and silently answers nothing.
+    /// </summary>
+    private static void NestedInterface(Assembly asm, string typeName, string nestedName, string[] expected)
+    {
+        Type outer = asm?.GetType(typeName);
+        Type nested = outer?.GetNestedType(nestedName, BindingFlags.Public | BindingFlags.NonPublic);
+
+        if (nested == null || !nested.IsInterface)
+        {
+            Report(false, $"{typeName}+{nestedName}", nested == null ? "nested type not found" : "not an interface");
+            return;
+        }
+
+        var actual = nested.GetMethods()
+            .Select(m => $"{m.Name}({string.Join(",", m.GetParameters().Select(p => p.ParameterType.Name))}):{m.ReturnType.Name}")
+            .OrderBy(s => s, StringComparer.Ordinal)
+            .ToArray();
+        var want = expected.OrderBy(s => s, StringComparer.Ordinal).ToArray();
+
+        bool ok = actual.SequenceEqual(want);
+        Report(ok, $"{typeName}+{nestedName} ({string.Join("; ", want)})", ok ? null : "found: " + string.Join(" | ", actual));
     }
 
     private static void Report(bool ok, string what, string detail)

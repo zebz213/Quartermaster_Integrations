@@ -112,6 +112,9 @@ EXTRASLOTS_PKG="shudnal-ExtraSlots-1.2.21"
 ADVENTUREBACKPACKS_PKG="Vapok-AdventureBackpacks-2.4.6"
 AAA_VERSION="2.1.12"
 AAABUILDMENU_VERSION="1.0.6"
+EPICLOOT_PKG="RandyKnapp-EpicLoot-0.15.5"
+PLANBUILD_PKG="MathiasDecrock-PlanBuild-0.20.0"
+WARDISLOVE_VERSION="4.0.9"
 
 # Optional dependencies the binding audit checks, at the versions the code is written against.
 thunderstore "$MYLITTLEUI_PKG" MyLittleUI.dll MyLittleUI.dll
@@ -125,6 +128,11 @@ hexium Vassteel Quartermaster "$QM_VERSION" Quartermaster.dll
 # Hexium-only mods, pinned to the builds the audit was written against.
 hexium Azumatt AAA_Crafting "$AAA_VERSION" AzuAntiArthriticCrafting.dll
 hexium Azumatt AAABuildMenu "$AAABUILDMENU_VERSION" AAABuildMenu.dll
+hexium Azumatt WardIsLove "$WARDISLOVE_VERSION" WardIsLove.dll
+
+# Integrations that must actually move items or filter access - audited like the rest.
+thunderstore "$EPICLOOT_PKG" EpicLoot.dll EpicLoot.dll
+thunderstore "$PLANBUILD_PKG" PlanBuild.dll PlanBuild.dll
 
 # ---- 4. Fail with the missing path, not a wall of MSBuild reference errors --------------------
 required=(
@@ -142,6 +150,9 @@ required=(
   refs/mods/ExtraSlots.dll
   refs/mods/AdventureBackpacks.dll
   refs/mods/AAABuildMenu.dll
+  refs/mods/EpicLoot.dll
+  refs/mods/PlanBuild.dll
+  refs/mods/WardIsLove.dll
 )
 for file in "${required[@]}"; do
   [ -f "$file" ] || { echo "missing reference: $file" >&2; exit 1; }

@@ -64,6 +64,9 @@ namespace Quartermaster_Integrations
     [BepInDependency(ExtraSlotsGUID, BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency(AdventureBackpacksGUID, BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency(AAABuildMenuGUID, BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency(EpicLootGUID, BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency(PlanBuildGUID, BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency(WardIsLoveGUID, BepInDependency.DependencyFlags.SoftDependency)]
     public class BridgePlugin : BaseUnityPlugin
     {
         public const string PluginGUID = "com.bootstrapboys.quartermaster_integrations";
@@ -74,7 +77,7 @@ namespace Quartermaster_Integrations
         //
         // Versioning: bug fixes bump the patch digit (2.4.2 -> 2.4.3); adding an integration bumps the
         // minor and resets the patch (2.4.3 -> 2.5.0). Every bump gets a changelog entry.
-        public const string PluginVersion = "2.5.0";
+        public const string PluginVersion = "2.6.1";
 
         public const string QuartermasterGUID = "local.valheim.quartermaster";
         public const string MLUIGUID = "shudnal.MyLittleUI";
@@ -82,6 +85,10 @@ namespace Quartermaster_Integrations
         public const string ExtraSlotsGUID = "shudnal.ExtraSlots";
         public const string AdventureBackpacksGUID = "vapok.mods.adventurebackpacks";
         public const string AAABuildMenuGUID = "Azumatt.AAABuildMenu";
+        public const string EpicLootGUID = "randyknapp.mods.epicloot";
+        public const string EpicLootContainerBridgeGUID = "KlownKiller.EpicLootContainerBridge";
+        public const string PlanBuildGUID = "marcopogo.PlanBuild";
+        public const string WardIsLoveGUID = "Azumatt.WardIsLove";
 
         private readonly Harmony _harmony = new Harmony(PluginGUID);
         internal static ManualLogSource Log;
@@ -105,6 +112,26 @@ namespace Quartermaster_Integrations
         private const int AnyQuality = -1;
         private const bool MatchWorldLevel = false;
         private static Func<string, int, bool, int> _countAvailableNearPlayer;
+
+        // Quartermaster's own list of spendable containers. The integrations that must actually move
+        // items (EpicLoot, PlanBuild) and the WardIsLove permission filter walk this, so they follow
+        // the same CraftRange/supply/ward rules as the counts.
+        private static Func<Player, bool, IEnumerable<Container>> _craftStores;
+
+        // Per-frame memo of the storage container list; shared empty list keeps the unbound path
+        // allocation-free.
+        private static readonly List<Container> EmptyStorageContainers = new List<Container>();
+        private static List<Container> _cachedContainers;
+        private static int _cachedContainersFrame = -1;
+
+        // Kept so an integration can reach a Quartermaster type that is not bound as a delegate.
+        internal static Assembly QuartermasterAssembly;
+
+        /// <summary>True when Quartermaster's counting entry point bound successfully.</summary>
+        public static bool HasStorageCountBinding => _countAvailableNearPlayer != null;
+
+        /// <summary>True when Quartermaster's spendable-container list bound successfully.</summary>
+        public static bool HasStorageContainerBinding => _craftStores != null;
 
         // Per-frame unified caches for zero-GC lookups
         private static int _cachedFrame = -1;
@@ -183,6 +210,9 @@ namespace Quartermaster_Integrations
             ExtraSlotsIntegration.Initialize(_harmony);
             AdventureBackpacksIntegration.Initialize(_harmony);
             AAABuildMenuIntegration.Initialize(_harmony);
+            EpicLootIntegration.Initialize(_harmony);
+            PlanBuildIntegration.Initialize(_harmony);
+            WardIsLoveIntegration.Initialize(_harmony);
 
             // Soft-dependency integrations set up their own patches; container-content invalidation
             // comes from Inventory.Changed (Container.Load ends in Inventory.Load, which calls
@@ -193,8 +223,9 @@ namespace Quartermaster_Integrations
             // readiness) are final; reading them mid-initialisation reported false negatives.
             QIDebugger.LogConfigSnapshot();
             QIDebugger.LogPatchInventory();
+            QIDebugger.LogIntegrationSnapshot();
 
-            Log.LogInfo($"{PluginName} v{PluginVersion} loaded (MLUI: {MLUIIntegration.IsReady}, AAA: {AAACraftingIntegration.IsReady}, ExtraSlots: {ExtraSlotsIntegration.IsReady}, Backpacks: {AdventureBackpacksIntegration.IsReady}, BuildMenu: {AAABuildMenuIntegration.IsReady}, QM storage query: {_countAvailableNearPlayer != null}).");
+            Log.LogInfo($"{PluginName} v{PluginVersion} loaded (MLUI: {MLUIIntegration.IsReady}, AAA: {AAACraftingIntegration.IsReady}, ExtraSlots: {ExtraSlotsIntegration.IsReady}, Backpacks: {AdventureBackpacksIntegration.IsReady}, BuildMenu: {AAABuildMenuIntegration.IsReady}, EpicLoot: {EpicLootIntegration.IsReady}, PlanBuild: {PlanBuildIntegration.IsReady}, WardIsLove: {WardIsLoveIntegration.IsReady}, QM storage query: {_countAvailableNearPlayer != null}, QM storages: {_craftStores != null}).");
         }
 
         private void Start()
@@ -204,6 +235,7 @@ namespace Quartermaster_Integrations
 
         private void OnDestroy()
         {
+            EpicLootIntegration.Unregister();
             _harmony?.UnpatchSelf();
         }
 
@@ -247,6 +279,7 @@ namespace Quartermaster_Integrations
                 }
 
                 Assembly qmAssembly = qmInfo.Instance.GetType().Assembly;
+                QuartermasterAssembly = qmAssembly;
                 Type warehouseType = qmAssembly.GetType("Quartermaster.WarehouseService");
                 if (warehouseType == null)
                 {
@@ -268,6 +301,22 @@ namespace Quartermaster_Integrations
 
                 _countAvailableNearPlayer = (Func<string, int, bool, int>)Delegate.CreateDelegate(
                     typeof(Func<string, int, bool, int>), query);
+
+                MethodInfo stores = AccessTools.Method(
+                    warehouseType,
+                    "CraftStores",
+                    new[] { typeof(Player), typeof(bool) });
+
+                if (stores != null && stores.ReturnType == typeof(IEnumerable<Container>))
+                {
+                    _craftStores = (Func<Player, bool, IEnumerable<Container>>)Delegate.CreateDelegate(
+                        typeof(Func<Player, bool, IEnumerable<Container>>), stores);
+                }
+                else
+                {
+                    QIDebugger.LogError("[QM] WarehouseService.CraftStores(Player, bool) : IEnumerable<Container> not found. " +
+                             "Item-moving integrations (EpicLoot, PlanBuild) and the WardIsLove filter stay inactive.");
+                }
 
                 if (QIDebugger.Enabled)
                 {
@@ -373,6 +422,123 @@ namespace Quartermaster_Integrations
         public static void MarkCacheDirty()
         {
             _cacheDirty = true;
+            _cachedContainersFrame = -1;
+        }
+
+        /// <summary>
+        /// Quartermaster's spendable containers for this player. Never null, so callers can always
+        /// iterate; an unavailable binding yields an empty list and the feature degrades to pockets.
+        /// </summary>
+        public static List<Container> GetStorageContainers(Player player)
+        {
+            if (!Enabled || player == null || _craftStores == null) return EmptyStorageContainers;
+
+            int frame = Time.frameCount;
+            if (_cachedContainers != null && _cachedContainersFrame == frame) return _cachedContainers;
+
+            List<Container> containers = new List<Container>();
+            try
+            {
+                foreach (Container container in _craftStores(player, false))
+                {
+                    if (container != null) containers.Add(container);
+                }
+            }
+            catch (Exception ex)
+            {
+                QIDebugger.LogDebug("[QM] CraftStores failed; treating storage as empty", ex);
+                containers.Clear();
+            }
+
+            // Memoised for the frame: CraftStores sorts and filters every chest, and Epic Loot asks
+            // for the item list and then removes from it in the same frame.
+            _cachedContainers = containers;
+            _cachedContainersFrame = frame;
+            return containers;
+        }
+
+        /// <summary>
+        /// Live ItemData instances held in storage. Callers must treat these as borrowed: moving or
+        /// removing an item invalidates the list returned by the container inventory.
+        /// </summary>
+        public static List<ItemDrop.ItemData> GetStorageItems(Player player)
+        {
+            List<ItemDrop.ItemData> items = new List<ItemDrop.ItemData>();
+            foreach (Container container in GetStorageContainers(player))
+            {
+                Inventory inventory = container.GetInventory();
+                if (inventory != null) items.AddRange(inventory.GetAllItems());
+            }
+
+            return items;
+        }
+
+        /// <summary>
+        /// Removes up to <paramref name="amount"/> items matching a shared name from Quartermaster
+        /// storage and reports how many actually left. Iterates containers in Quartermaster's own
+        /// order so the materials come from the same chests its counts advertise.
+        /// </summary>
+        public static int RemoveFromStorage(Player player, string sharedName, int amount)
+        {
+            if (!Enabled || player == null || string.IsNullOrEmpty(sharedName) || amount <= 0) return 0;
+
+            int removed = 0;
+            foreach (Container container in GetStorageContainers(player))
+            {
+                if (removed >= amount) break;
+
+                Inventory inventory = container.GetInventory();
+                if (inventory == null) continue;
+
+                // GetAllItems hands back the live list and RemoveItem mutates it, so walk backwards:
+                // a full take removes the element at the current index, which backwards iteration
+                // already accounts for.
+                List<ItemDrop.ItemData> items = inventory.GetAllItems();
+                for (int i = items.Count - 1; i >= 0 && removed < amount; i--)
+                {
+                    ItemDrop.ItemData item = items[i];
+                    if (item?.m_shared == null ||
+                        !string.Equals(item.m_shared.m_name, sharedName, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    int take = Math.Min(item.m_stack, amount - removed);
+                    if (inventory.RemoveItem(item, take)) removed += take;
+                }
+            }
+
+            if (removed > 0)
+            {
+                MarkCacheDirty();
+                QIDebugger.LogDebug($"[QM] Removed {removed}x '{sharedName}' from storage");
+            }
+
+            return removed;
+        }
+
+        /// <summary>
+        /// Removes from one specific stack, matched by instance identity so a quality or world-level
+        /// variant is never substituted for the item the caller asked about.
+        /// </summary>
+        public static int RemoveExactFromStorage(Player player, ItemDrop.ItemData target, int amount)
+        {
+            if (!Enabled || player == null || target == null || amount <= 0) return 0;
+
+            foreach (Container container in GetStorageContainers(player))
+            {
+                Inventory inventory = container.GetInventory();
+                if (inventory == null || !inventory.GetAllItems().Contains(target)) continue;
+
+                int take = Math.Min(target.m_stack, amount);
+                if (!inventory.RemoveItem(target, take)) return 0;
+
+                MarkCacheDirty();
+                QIDebugger.LogDebug($"[QM] Removed {take}x '{target.m_shared?.m_name}' (exact stack) from storage");
+                return take;
+            }
+
+            return 0;
         }
 
         private static void UpdateCachedColors()

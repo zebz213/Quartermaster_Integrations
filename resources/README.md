@@ -27,6 +27,9 @@ Puts Quartermaster's nearby storage into the crafting window: how much of each i
 | **ExtraSlots** (`shudnal.ExtraSlots`) | No — 1.2.21+ | Slot rows and typed slots survive Quartermaster's sort/store |
 | **AdventureBackpacks** (`vapok.mods.adventurebackpacks`) | No — 2.4.6+ | Backpack contents excluded from counts, backpack proxy never a store target |
 | **AAABuildMenu** (`Azumatt.AAABuildMenu`) | No — 1.0.6+ | Pinned build rows show storage-inclusive have/need counts |
+| **Epic Loot** (`randyknapp.mods.epicloot`) | No — 0.15.5+ | Enchanting and sacrifice costs can be paid from storage; the items are actually taken from the chests |
+| **PlanBuild** (`marcopogo.PlanBuild`) | No — 0.20.0+ | Plan pieces can be placed from storage, including "hold to add materials" |
+| **WardIsLove** (`Azumatt.WardIsLove`) | No — 4.0.9+ | Chests inside a ward you are not permitted on are excluded from counts and never pulled from |
 
 Every optional integration is reflection-bound at startup and reports what it found. Missing one costs you that specific convenience, never the mod itself.
 
@@ -99,6 +102,11 @@ Set `DebugMode = true` under `3. Debug` and the mod writes `BepInEx/BSBLogs/Quar
 | `[Config] DisplayMode: …` | the settings that session actually ran with |
 | `[Craft] '<item>' xN` then one row per requirement | `need N \| pockets A + storage B = C \| enough True/False` for the selected recipe |
 | `[AAABuildMenu] '<item>': pockets A + storage B = C` | a pinned row's count changed, and from what |
+| `[Integrations] EpicLoot: … PlanBuild: … WardIsLove: …` | which optional integrations bound this session |
+| `[QM] Bindings: CountAvailableNearPlayer=… CraftStores=…` | which Quartermaster entry points resolved |
+| `[EpicLoot] Took N/Mx '<item>' from storage` | an Epic Loot cost was actually paid out of a chest |
+| `[PlanBuild] Plan costs include N storage container(s)` | PlanBuild is being offered storage (one line per 10 s) |
+| `[WardIsLove] Excluded '<chest>' … from storage` | ward permissions hid a chest from storage (one line per 10 s) |
 
 ---
 
@@ -107,10 +115,12 @@ Set `DebugMode = true` under `3. Debug` and the mod writes `BepInEx/BSBLogs/Quar
 **Check the load line first.** In your `BepInEx/LogOutput.log`, you should see:
 
 ```
-Quartermaster Integrations v<version> loaded (MLUI: True, AAA: True, ExtraSlots: True, Backpacks: True, BuildMenu: True, QM storage query: True).
+Quartermaster Integrations v<version> loaded (MLUI: True, AAA: True, ExtraSlots: True, Backpacks: True, BuildMenu: True, EpicLoot: True, PlanBuild: True, WardIsLove: True, QM storage query: True, QM storages: True).
 ```
 
 * `QM storage query: False` — Quartermaster is older than 0.1.66 or the method was not found; counts will fall back to pockets only. An explanatory `[QM]` error will appear above this line.
+* `QM storages: False` — Quartermaster's container list was not found; Epic Loot and PlanBuild cannot take items from chests, and the WardIsLove filter is inactive. Counts still work.
+* `EpicLoot: False` with an `[EpicLoot]` error — usually **EpicLootContainerBridge** being installed at the same time (see below).
 * A `[Patch] 'something' skipped/failed` line indicates an integration that failed to bind, along with the reason why.
 
 **Numbers look wrong?** The count is limited by three of Quartermaster's own rules. If the display shows pockets only, it is one of these:
@@ -120,5 +130,11 @@ Quartermaster Integrations v<version> loaded (MLUI: True, AAA: True, ExtraSlots:
 * **Global toggle** — Quartermaster's `CraftFromContainers`. With it off, storage is not offered to crafting at all.
 
 All three are enforced by Quartermaster, not by this mod, so the display follows them exactly.
+
+**Installed EpicLootContainerBridge too?** This mod refuses to register its Epic Loot provider while that bridge is present, because Epic Loot sums every provider and your chest totals would double. Remove the bridge to use this integration instead; the `[EpicLoot]` error in the log names the conflict.
+
+**Epic Loot's enchanting UI lists storage items?** Epic Loot has a `SpendOnlyStorageMods` setting. Add `bootstrapboys.quartermaster` to it if you want storage to pay costs without showing up as editable inventory in menus that move items around.
+
+**PlanBuild or WardIsLove not taking effect?** Both need `QM storages: True` in the load line plus their own flag in `[Integrations]`. WardIsLove only ever removes containers: a chest outside every ward is never affected, and inside a ward where you are permitted nothing changes.
 
 **Something else?** Set `DebugMode = true`, reproduce the issue, and include both `BepInEx/BSBLogs/QuarterMaster_Integrations.log` and `BepInEx/LogOutput.log` in your bug report.
