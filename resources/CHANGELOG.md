@@ -6,6 +6,17 @@ Every version that gets built is listed here, newest first — including builds 
 
 ---
 
+## [2.6.2] - 2026-10-31
+
+### Added
+
+* **WardIsLove host range** (`1. General > WardHostRange`, default on). While you are inside a WardIsLove ward, that ward's own radius becomes the crafting and storage range: the crafting window's counts, the max-craft number and the chests a craft may pull from all use the ward radius instead of Quartermaster's CraftRange. The bubble and your storage range become the same thing.
+  * WardIsLove is the host: the per-ward radius its own UI edits wins, including when it is smaller than CraftRange. Outside every ward, Quartermaster's CraftRange applies unchanged.
+  * Applied at Quartermaster's own range reads, used by both counting and craft validation, so the number the window shows is the number a craft can actually take.
+  * Only wards WardIsLove is hosting are affected; a plain vanilla ward keeps Quartermaster's range.
+
+---
+
 ## [2.6.1] - 2026-10-31
 
 The remaining three integrations from the compatibility review, plus the review pass they triggered.

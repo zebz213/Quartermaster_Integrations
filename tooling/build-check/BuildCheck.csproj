@@ -31,6 +31,7 @@
     <Compile Include="../../epicloot_integration.cs" Link="mod/epicloot_integration.cs" />
     <Compile Include="../../planbuild_integration.cs" Link="mod/planbuild_integration.cs" />
     <Compile Include="../../wardislove_integration.cs" Link="mod/wardislove_integration.cs" />
+    <Compile Include="../../ward_range.cs" Link="mod/ward_range.cs" />
     <Compile Include="../../qi_debugger.cs" Link="mod/qi_debugger.cs" />
   </ItemGroup>
 

@@ -50,6 +50,11 @@ namespace Quartermaster_Integrations
             try
             {
                 Assembly assembly = info.Instance.GetType().Assembly;
+
+                // Range tying is independent of the permission filter, so bind it before the
+                // CheckAccess lookup that may fail on a future WardIsLove layout.
+                WardHostRange.Initialize(harmony, assembly);
+
                 Type check = assembly.GetType("WardIsLove.Util.CustomCheck");
                 MethodInfo checkAccess = check == null
                     ? null

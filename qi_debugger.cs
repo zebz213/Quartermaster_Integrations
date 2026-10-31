@@ -300,6 +300,12 @@ namespace Quartermaster_Integrations
                 "[QM] Bindings: " +
                 $"CountAvailableNearPlayer={BridgePlugin.HasStorageCountBinding}, " +
                 $"CraftStores={BridgePlugin.HasStorageContainerBinding}");
+
+            LogDebug(
+                "[WardHostRange] " +
+                $"Toggle={BridgePlugin.WardHostRange?.Value}, " +
+                $"Active={WardHostRange.Active}, Bound={WardHostRange.IsReady}" +
+                (string.IsNullOrEmpty(WardHostRange.BindError) ? string.Empty : $", Error={WardHostRange.BindError}"));
         }
 
         /// <summary>

@@ -32,7 +32,8 @@ namespace Quartermaster_Integrations
             string label,
             HarmonyMethod prefix = null,
             HarmonyMethod postfix = null,
-            HarmonyMethod finalizer = null)
+            HarmonyMethod finalizer = null,
+            HarmonyMethod transpiler = null)
         {
             if (harmony == null) return false;
 
@@ -45,7 +46,7 @@ namespace Quartermaster_Integrations
             try
             {
                 // The 5-argument overload is [Obsolete(..., error: true)] in HarmonyX 2.x.
-                harmony.Patch(target, prefix, postfix, null, finalizer, null);
+                harmony.Patch(target, prefix, postfix, transpiler, finalizer, null);
                 if (QIDebugger.Enabled) QIDebugger.LogDebug($"[Patch] '{label}' applied.");
                 return true;
             }
@@ -77,7 +78,7 @@ namespace Quartermaster_Integrations
         //
         // Versioning: bug fixes bump the patch digit (2.4.2 -> 2.4.3); adding an integration bumps the
         // minor and resets the patch (2.4.3 -> 2.5.0). Every bump gets a changelog entry.
-        public const string PluginVersion = "2.6.1";
+        public const string PluginVersion = "2.6.2";
 
         public const string QuartermasterGUID = "local.valheim.quartermaster";
         public const string MLUIGUID = "shudnal.MyLittleUI";
@@ -96,6 +97,9 @@ namespace Quartermaster_Integrations
         public static ConfigEntry<bool> ModEnabled;
         public static ConfigEntry<RequirementDisplayMode> DisplayMode;
         public static ConfigEntry<bool> DeferToOtherFormatting;
+
+        /// <summary>WardIsLove only: use the ward's radius as the crafting/storage range while inside it.</summary>
+        public static ConfigEntry<bool> WardHostRange;
         public static ConfigEntry<Color> SufficientResourceColor;
         public static ConfigEntry<Color> InsufficientFlashBrightColor;
         public static ConfigEntry<Color> InsufficientFlashDarkColor;
@@ -165,6 +169,15 @@ namespace Quartermaster_Integrations
                 "Leave the requirement amount text alone when another mod (AAA Crafting, AdventureBackpacks) " +
                 "has already formatted it. Vanilla's own text is a bare number, so this only triggers when " +
                 "something else has decorated the row. Enable it if you prefer their 'have/need' display.");
+
+            WardHostRange = Config.Bind(
+                "1. General",
+                "WardHostRange",
+                true,
+                "WardIsLove only. While you are inside one of its wards, that ward's radius replaces " +
+                "Quartermaster's CraftRange for the crafting counts, the max-craft number and which chests " +
+                "a craft may pull from - the ward bubble and your storage range become the same thing. " +
+                "Outside a ward nothing changes. Turn this off to always use Quartermaster's CraftRange.");
 
             SufficientResourceColor = Config.Bind(
                 "2. Visuals",
