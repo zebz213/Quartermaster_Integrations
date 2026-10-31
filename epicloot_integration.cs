@@ -39,9 +39,6 @@ namespace Quartermaster_Integrations
                 return;
             }
 
-            // Ward-bubble range is an Epic Loot feature, so it is bound here rather than globally.
-            WardRange.Initialize();
-
             // Epic Loot sums every registered provider. A bridge that already reports Quartermaster
             // storage would double every total, so refuse rather than silently inflating costs.
             if (Chainloader.PluginInfos.ContainsKey(BridgePlugin.EpicLootContainerBridgeGUID))
@@ -131,19 +128,9 @@ namespace Quartermaster_Integrations
         private static List<ItemDrop.ItemData> GetStoredItems()
         {
             Player player = Player.m_localPlayer;
-            if (player == null) return new List<ItemDrop.ItemData>();
-
-            List<ItemDrop.ItemData> items = BridgePlugin.GetStorageItems(player);
-
-            // Ward-bubble chests are outside Quartermaster's CraftRange, so they are not in the list
-            // above; include their contents too or Epic Loot cannot see what it may spend.
-            foreach (Container container in WardRange.Collect(player, BridgePlugin.GetStorageContainers(player)))
-            {
-                Inventory inventory = container.GetInventory();
-                if (inventory != null) items.AddRange(inventory.GetAllItems());
-            }
-
-            return items;
+            return player == null
+                ? new List<ItemDrop.ItemData>()
+                : BridgePlugin.GetStorageItems(player);
         }
 
         private static int CountStoredItem(string sharedName)
@@ -153,14 +140,7 @@ namespace Quartermaster_Integrations
 
             // Storage only: Epic Loot adds the player's own inventory itself, so including pockets
             // here would count them twice.
-            int count = BridgePlugin.GetQuartermasterStorageCount(player, sharedName);
-
-            foreach (Container container in WardRange.Collect(player, BridgePlugin.GetStorageContainers(player)))
-            {
-                count += WardRange.AvailableIn(container, sharedName);
-            }
-
-            return count;
+            return BridgePlugin.GetQuartermasterStorageCount(player, sharedName);
         }
 
         private static int RemoveStoredItem(string sharedName, int amount)
@@ -169,15 +149,6 @@ namespace Quartermaster_Integrations
             if (player == null) return 0;
 
             int removed = BridgePlugin.RemoveFromStorage(player, sharedName, amount);
-
-            if (removed < amount)
-            {
-                removed += BridgePlugin.RemoveFromContainers(
-                    WardRange.Collect(player, BridgePlugin.GetStorageContainers(player)),
-                    sharedName,
-                    amount - removed);
-            }
-
             if (removed > 0)
             {
                 QIDebugger.LogDebug($"[EpicLoot] Took {removed}/{amount}x '{sharedName}' from storage");
@@ -192,15 +163,6 @@ namespace Quartermaster_Integrations
             if (player == null) return 0;
 
             int removed = BridgePlugin.RemoveExactFromStorage(player, item, amount);
-
-            if (removed < amount)
-            {
-                removed += BridgePlugin.RemoveExactFromContainers(
-                    WardRange.Collect(player, BridgePlugin.GetStorageContainers(player)),
-                    item,
-                    amount - removed);
-            }
-
             if (removed > 0)
             {
                 QIDebugger.LogDebug($"[EpicLoot] Took {removed}/{amount}x '{item?.m_shared?.m_name}' (exact stack) from storage");

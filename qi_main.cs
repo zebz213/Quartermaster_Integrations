@@ -77,7 +77,7 @@ namespace Quartermaster_Integrations
         //
         // Versioning: bug fixes bump the patch digit (2.4.2 -> 2.4.3); adding an integration bumps the
         // minor and resets the patch (2.4.3 -> 2.5.0). Every bump gets a changelog entry.
-        public const string PluginVersion = "2.6.2";
+        public const string PluginVersion = "2.6.1";
 
         public const string QuartermasterGUID = "local.valheim.quartermaster";
         public const string MLUIGUID = "shudnal.MyLittleUI";
@@ -96,9 +96,6 @@ namespace Quartermaster_Integrations
         public static ConfigEntry<bool> ModEnabled;
         public static ConfigEntry<RequirementDisplayMode> DisplayMode;
         public static ConfigEntry<bool> DeferToOtherFormatting;
-
-        /// <summary>Epic Loot only: count storage inside the ward the player stands in, at ward radius.</summary>
-        public static ConfigEntry<bool> WardRangeOverride;
         public static ConfigEntry<Color> SufficientResourceColor;
         public static ConfigEntry<Color> InsufficientFlashBrightColor;
         public static ConfigEntry<Color> InsufficientFlashDarkColor;
@@ -168,15 +165,6 @@ namespace Quartermaster_Integrations
                 "Leave the requirement amount text alone when another mod (AAA Crafting, AdventureBackpacks) " +
                 "has already formatted it. Vanilla's own text is a bare number, so this only triggers when " +
                 "something else has decorated the row. Enable it if you prefer their 'have/need' display.");
-
-            WardRangeOverride = Config.Bind(
-                "1. General",
-                "WardRangeOverride",
-                false,
-                "Epic Loot only. When on, a storage chest inside a ward you are standing in counts from " +
-                "anywhere within that ward's bubble, instead of only within Quartermaster's CraftRange. " +
-                "The bubble widens range; it never grants access, so chests in a ward you are not " +
-                "permitted on, and chests with Crafting Supply off, are still ignored.");
 
             SufficientResourceColor = Config.Bind(
                 "2. Visuals",
@@ -492,24 +480,14 @@ namespace Quartermaster_Integrations
         /// </summary>
         public static int RemoveFromStorage(Player player, string sharedName, int amount)
         {
-            if (!Enabled || player == null) return 0;
-            return RemoveFromContainers(GetStorageContainers(player), sharedName, amount);
-        }
-
-        /// <summary>
-        /// Same removal, over an explicit container set (the ward-bubble path passes the chests the
-        /// player is standing among instead of Quartermaster's CraftRange list).
-        /// </summary>
-        public static int RemoveFromContainers(IEnumerable<Container> containers, string sharedName, int amount)
-        {
-            if (!Enabled || containers == null || string.IsNullOrEmpty(sharedName) || amount <= 0) return 0;
+            if (!Enabled || player == null || string.IsNullOrEmpty(sharedName) || amount <= 0) return 0;
 
             int removed = 0;
-            foreach (Container container in containers)
+            foreach (Container container in GetStorageContainers(player))
             {
                 if (removed >= amount) break;
 
-                Inventory inventory = container?.GetInventory();
+                Inventory inventory = container.GetInventory();
                 if (inventory == null) continue;
 
                 // GetAllItems hands back the live list and RemoveItem mutates it, so walk backwards:
@@ -545,17 +523,11 @@ namespace Quartermaster_Integrations
         /// </summary>
         public static int RemoveExactFromStorage(Player player, ItemDrop.ItemData target, int amount)
         {
-            if (!Enabled || player == null) return 0;
-            return RemoveExactFromContainers(GetStorageContainers(player), target, amount);
-        }
+            if (!Enabled || player == null || target == null || amount <= 0) return 0;
 
-        public static int RemoveExactFromContainers(IEnumerable<Container> containers, ItemDrop.ItemData target, int amount)
-        {
-            if (!Enabled || containers == null || target == null || amount <= 0) return 0;
-
-            foreach (Container container in containers)
+            foreach (Container container in GetStorageContainers(player))
             {
-                Inventory inventory = container?.GetInventory();
+                Inventory inventory = container.GetInventory();
                 if (inventory == null || !inventory.GetAllItems().Contains(target)) continue;
 
                 int take = Math.Min(target.m_stack, amount);

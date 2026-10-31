@@ -6,16 +6,6 @@ Every version that gets built is listed here, newest first — including builds 
 
 ---
 
-## [2.6.2] - 2026-10-31
-
-### Added
-
-* **Ward-bubble range for Epic Loot** (`1. General > WardRangeOverride`, default off). While standing inside a ward, storage inside that ward counts from anywhere within its bubble instead of only within Quartermaster's CraftRange, so enchanting costs can draw on the chest at the far end of a warded base.
-  * Scope: Epic Loot's provider only. Crafting rows keep Quartermaster's own range rules.
-  * Range only, never access: a chest still has to pass Quartermaster's per-chest Crafting Supply flag and its in-use check, plus vanilla and WardIsLove ward permissions.
-
----
-
 ## [2.6.1] - 2026-10-31
 
 The remaining three integrations from the compatibility review, plus the review pass they triggered.
