@@ -27,7 +27,7 @@ Puts Quartermaster's nearby storage into the crafting window: how much of each i
 | **ExtraSlots** (`shudnal.ExtraSlots`) | No — 1.2.21+ | Slot rows and typed slots survive Quartermaster's sort/store |
 | **AdventureBackpacks** (`vapok.mods.adventurebackpacks`) | No — 2.4.6+ | Backpack contents excluded from counts, backpack proxy never a store target |
 | **AAABuildMenu** (`Azumatt.AAABuildMenu`) | No — 1.0.6+ | Pinned build rows show storage-inclusive have/need counts |
-| **Epic Loot** (`randyknapp.mods.epicloot`) | No — 0.15.5+ | Enchanting and sacrifice costs can be paid from storage; the items are actually taken from the chests |
+| **Epic Loot** (`randyknapp.mods.epicloot`) | No — 0.15.5+ | Enchanting and sacrifice costs can be paid from storage; the items are actually taken from the chests, optionally at ward-bubble range |
 | **PlanBuild** (`marcopogo.PlanBuild`) | No — 0.20.0+ | Plan pieces can be placed from storage, including "hold to add materials" |
 | **WardIsLove** (`Azumatt.WardIsLove`) | No — 4.0.9+ | Chests inside a ward you are not permitted on are excluded from counts and never pulled from |
 
@@ -71,6 +71,7 @@ Generated at `BepInEx/config/com.bootstrapboys.quartermaster_integrations.cfg` o
 | `1. General` | `Enabled` | `true` | Turn the mod's UI changes off without uninstalling. |
 | `1. General` | `RequirementDisplayMode` | `CombinedTotal` | How the available count is written (see below). |
 | `1. General` | `DeferToOtherFormatting` | `false` | If AAA Crafting or AdventureBackpacks has already formatted a row, leave its text alone. Only enable this if you prefer their style. My Little UI's own "available resources amount" counts your pockets only, so deferring to it drops chest totals. |
+| `1. General` | `WardRangeOverride` | `false` | **Epic Loot only.** While you are standing inside a ward, storage inside that ward counts from anywhere in its bubble instead of only within Quartermaster's `CraftRange`. Range only — the chest's Crafting Supply flag and ward permissions still decide whether it is usable. |
 | `2. Visuals` | `SufficientColor` | `(0.68, 0.91, 0.90, 1.00)` | Color of the available count when you have enough. |
 | `2. Visuals` | `InsufficientFlashBrightColor` | `(1.00, 0.22, 0.22, 1.00)` | Bright end of the insufficient-material flash. |
 | `2. Visuals` | `InsufficientFlashDarkColor` | `(0.45, 0.02, 0.02, 1.00)` | Dark end of the insufficient-material flash. |
@@ -106,6 +107,7 @@ Set `DebugMode = true` under `3. Debug` and the mod writes `BepInEx/BSBLogs/Quar
 | `[QM] Bindings: CountAvailableNearPlayer=… CraftStores=…` | which Quartermaster entry points resolved |
 | `[EpicLoot] Took N/Mx '<item>' from storage` | an Epic Loot cost was actually paid out of a chest |
 | `[PlanBuild] Plan costs include N storage container(s)` | PlanBuild is being offered storage (one line per 10 s) |
+| `[WardRange] N extra chest(s) reachable through the ward bubble` | ward-bubble range found storage beyond CraftRange (one line per 10 s) |
 | `[WardIsLove] Excluded '<chest>' … from storage` | ward permissions hid a chest from storage (one line per 10 s) |
 
 ---
@@ -136,5 +138,7 @@ All three are enforced by Quartermaster, not by this mod, so the display follows
 **Epic Loot's enchanting UI lists storage items?** Epic Loot has a `SpendOnlyStorageMods` setting. Add `bootstrapboys.quartermaster` to it if you want storage to pay costs without showing up as editable inventory in menus that move items around.
 
 **PlanBuild or WardIsLove not taking effect?** Both need `QM storages: True` in the load line plus their own flag in `[Integrations]`. WardIsLove only ever removes containers: a chest outside every ward is never affected, and inside a ward where you are permitted nothing changes.
+
+**Turned on `WardRangeOverride` and nothing changed?** The chest has to sit inside the same ward you are standing in, that ward has to be active, and the chest still needs Crafting Supply on and must not be in use. The `[WardRange]` line in the debug log confirms it (`Toggle=True, Active=True`), and `[WardRange] N extra chest(s) reachable…` shows it actually finding them.
 
 **Something else?** Set `DebugMode = true`, reproduce the issue, and include both `BepInEx/BSBLogs/QuarterMaster_Integrations.log` and `BepInEx/LogOutput.log` in your bug report.

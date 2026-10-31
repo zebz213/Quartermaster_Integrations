@@ -43,6 +43,7 @@ internal static class Program
 
         // ---- Valheim targets that the mod's attribute patches address ---------------------------
         var vh = mlc.LoadFromAssemblyPath(Path.Combine(Managed, "assembly_valheim.dll"));
+        var ut = mlc.LoadFromAssemblyPath(Path.Combine(Managed, "assembly_utils.dll"));
         Method(vh, "InventoryGui", "SetupRequirement", new[] { "Transform", "Requirement", "Player", "Boolean", "Int32", "Int32" }, "Boolean", true);
         Method(vh, "InventoryGui", "UpdateRecipe", new[] { "Player", "Single" }, "Void", false);
         Method(vh, "InventoryGui", "Update", Array.Empty<string>(), "Void", false);
@@ -126,6 +127,15 @@ internal static class Program
         // ---- WardIsLove 4.0.9 -------------------------------------------------------------------
         var wil = Load(mlc, DepPath("WardIsLove.dll"));
         Method(wil, "WardIsLove.Util.CustomCheck", "CheckAccess", new[] { "Int64", "Vector3", "Single", "Boolean" }, "Boolean", true);
+
+        // ---- ward-bubble range: Quartermaster's registry + vanilla ward geometry ----------------
+        Method(qm, "Quartermaster.ContainerRegistry", "Nearby",
+            new[] { "Vector3", "Single", "Boolean", "Boolean", "String" }, "List`1", true);
+        Method(qm, "Quartermaster.ContainerRegistry", "GetSettings", new[] { "Container" }, "ChestSettings", true);
+        Field(vh, "PrivateArea", "m_allAreas", "List`1", true);
+        Field(vh, "PrivateArea", "m_radius", "Single", false);
+        Method(vh, "PrivateArea", "IsEnabled", new string[0], "Boolean", false);
+        Method(ut, "Utils", "DistanceXZ", new[] { "Vector3", "Vector3" }, "Single", true);
 
         Console.WriteLine("\n### versions audited");
         Console.WriteLine("  Quartermaster 0.1.66, AAA Crafting 2.1.12, MyLittleUI 1.2.33,");
